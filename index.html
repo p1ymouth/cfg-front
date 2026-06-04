@@ -15,7 +15,6 @@
         .file { cursor: pointer; color: #333; }
         .file:hover { text-decoration: underline; }
         .footer { margin-top: 40px; font-size: 12px; color: #666; text-align: center; }
-        /* 模态框 */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
         .modal-content { background-color: #fefefe; margin: 5% auto; padding: 20px; width: 80%; max-width: 900px; border-radius: 8px; }
         .close { color: #aaa; float: right; font-size: 28px; cursor: pointer; }
@@ -40,24 +39,15 @@
     </div>
 
     <script>
-        // 配置
         const GITHUB_USER = 'p1ymouth';
         const REPO_NAME = 'cfg-front';
         const BRANCH = 'main';
         const BASE_RAW = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/`;
 
-        let allFiles = [];          // 存储所有文件的 {path, name, size}
+        let allFiles = [];
         let currentPath = 'cfgs';   // 当前浏览的目录（相对于仓库根目录）
         let currentFileItem = null;
 
-        // 辅助函数
-        function getParentPath(path) {
-            const lastSlash = path.lastIndexOf('/');
-            if (lastSlash === -1) return '';
-            return path.substring(0, lastSlash);
-        }
-
-        // 获取当前目录下的直接子文件和子目录
         function getChildren(dirPath) {
             const children = { dirs: new Set(), files: [] };
             for (const file of allFiles) {
@@ -65,21 +55,18 @@
                     const relative = file.path.substring(dirPath.length + 1);
                     const firstSlash = relative.indexOf('/');
                     if (firstSlash === -1) {
-                        // 直接文件
                         children.files.push(file);
                     } else {
-                        // 子目录
                         const subDir = relative.substring(0, firstSlash);
                         children.dirs.add(subDir);
                     }
                 }
             }
-            // 将目录转换为数组并排序
             const dirList = Array.from(children.dirs).sort();
-            return { dirs: dirList, files: children.files.sort((a,b) => a.name.localeCompare(b.name)) };
+            const fileList = children.files.sort((a,b) => a.name.localeCompare(b.name));
+            return { dirs: dirList, files: fileList };
         }
 
-        // 渲染当前目录
         function renderCurrentDir() {
             const { dirs, files } = getChildren(currentPath);
             const listDiv = document.getElementById('file-list');
@@ -87,7 +74,6 @@
                 listDiv.innerHTML = '<li>此文件夹为空</li>';
             } else {
                 listDiv.innerHTML = '';
-                // 先渲染目录
                 for (const dir of dirs) {
                     const li = document.createElement('li');
                     const iconSpan = document.createElement('span');
@@ -105,7 +91,6 @@
                     li.appendChild(nameSpan);
                     listDiv.appendChild(li);
                 }
-                // 再渲染文件
                 for (const file of files) {
                     const li = document.createElement('li');
                     const iconSpan = document.createElement('span');
@@ -136,17 +121,17 @@
                 });
                 return;
             }
-            let parts = currentPath.substring(5).split('/'); // 去掉 "cfgs/" 前缀
+            let parts = currentPath.substring(5).split('/');
             let cumulative = 'cfgs';
             let html = '<a href="#" data-path="cfgs">根目录</a> / ';
-            parts.forEach((part, idx) => {
-                cumulative += '/' + part;
-                if (idx === parts.length - 1) {
-                    html += `<span>${part}</span>`;
+            for (let i = 0; i < parts.length; i++) {
+                cumulative += '/' + parts[i];
+                if (i === parts.length - 1) {
+                    html += `<span>${parts[i]}</span>`;
                 } else {
-                    html += `<a href="#" data-path="${cumulative}">${part}</a> / `;
+                    html += `<a href="#" data-path="${cumulative}">${parts[i]}</a> / `;
                 }
-            });
+            }
             breadDiv.innerHTML = html;
             document.querySelectorAll('#breadcrumb a').forEach(link => {
                 link.addEventListener('click', (e) => {
@@ -158,12 +143,10 @@
         }
 
         function updateURLAndRender() {
-            // 更新 URL hash，但不触发页面刷新
             window.location.hash = currentPath === 'cfgs' ? '' : currentPath;
             renderCurrentDir();
         }
 
-        // 预览文件
         async function previewFile(item) {
             currentFileItem = item;
             document.getElementById('preview-filename').innerText = item.name;
@@ -186,17 +169,15 @@
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
         }
 
-        // 加载 files.json
         async function loadFileList() {
             try {
                 const resp = await fetch('files.json');
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                allFiles = await resp.json();
-                // 确保 files.json 是数组且每个元素有 path
-                if (!Array.isArray(allFiles)) throw new Error('Invalid files.json');
-                // 过滤出 cfgs 目录下的文件（防止根目录其他文件混入）
-                allFiles = allFiles.filter(f => f.path.startsWith('cfgs/'));
-                // 从 hash 中读取初始目录
+                const data = await resp.json();
+                if (!Array.isArray(data)) throw new Error('Invalid files.json');
+                // 只保留 cfgs 目录下的文件
+                allFiles = data.filter(f => f.path && f.path.startsWith('cfgs/'));
+                // 读取 hash 决定起始目录
                 const hash = window.location.hash.slice(1);
                 if (hash && hash.startsWith('cfgs/')) {
                     currentPath = hash;
@@ -209,7 +190,7 @@
             }
         }
 
-        // 模态框事件
+        // 模态框关闭等
         const modal = document.getElementById('previewModal');
         document.querySelector('.close').onclick = () => modal.style.display = 'none';
         window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
@@ -225,7 +206,6 @@
             }
         };
 
-        // 启动
         loadFileList();
     </script>
 </body>
