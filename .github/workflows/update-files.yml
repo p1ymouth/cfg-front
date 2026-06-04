@@ -1,9 +1,10 @@
 name: Update files list
 
 on:
-  schedule:
-    - cron: '*/10 * * * *'   # 每10分钟自动更新一次
-  workflow_dispatch:         # 允许手动触发
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -12,31 +13,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate files.json from cfgs directory
+      - name: Fetch cfgs directory from GitHub API
         run: |
-          # 如果 cfgs 目录不存在，则创建一个空的 files.json
-          if [ ! -d "cfgs" ]; then
-            echo '[]' > files.json
-            exit 0
-          fi
-          # 使用 find 递归列出所有文件（不包括目录本身），输出 JSON 格式
-          echo '[' > files.json
-          find cfgs -type f | while read -r file; do
-            # 转义路径中的双引号和反斜杠
-            safe_path=$(echo "$file" | sed 's/"/\\"/g')
-            # 获取文件大小（字节）
-            size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
-            # 输出条目，最后一条不能有逗号
-            echo "{\"path\":\"$safe_path\",\"name\":\"$(basename "$file")\",\"size\":$size},"
-          done | sed '$ s/,$//' >> files.json
-          echo ']' >> files.json
-          # 验证 JSON 格式
-          cat files.json
+          curl -s "https://api.github.com/repos/${{ github.repository }}/contents/cfgs" > files.json
 
       - name: Commit and push files.json
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "actions@github.com"
           git add files.json
-          git commit -m "Auto-update files.json" || echo "No changes to commit"
+          git commit -m "Update files.json" || echo "No changes to commit"
           git push
