@@ -13,11 +13,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Fetch and filter cfgs directory
+      - name: Generate files.json from cfgs directory (recursive)
         run: |
-          curl -s "https://api.github.com/repos/${{ github.repository }}/contents/cfgs" \
-            | jq '[.[] | select(.type == "file") | {path: .path, name: .name, size: .size}]' \
-            > files.json
+          if [ ! -d "cfgs" ]; then
+            echo '[]' > files.json
+            exit 0
+          fi
+          echo '[' > files.json
+          # 递归查找所有文件
+          find cfgs -type f | sort | while read -r file; do
+            # 转义路径中的双引号
+            safe_path=$(printf "%s" "$file" | sed 's/"/\\"/g')
+            name=$(basename "$file")
+            size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+            echo "{\"path\":\"$safe_path\",\"name\":\"$name\",\"size\":$size},"
+          done | sed '$ s/,$//' >> files.json
+          echo ']' >> files.json
 
       - name: Commit and push files.json
         run: |
