@@ -13,9 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Fetch cfgs directory from GitHub API
+      - name: Fetch and filter cfgs directory
         run: |
-          curl -s "https://api.github.com/repos/${{ github.repository }}/contents/cfgs" > files.json
+          curl -s "https://api.github.com/repos/${{ github.repository }}/contents/cfgs" \
+            | jq '[.[] | select(.type == "file") | {path: .path, name: .name, size: .size}]' \
+            > files.json
 
       - name: Commit and push files.json
         run: |
