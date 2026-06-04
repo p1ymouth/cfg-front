@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>配置文件仓库 - 预览与下载</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 30px auto; padding: 20px; }
+        .breadcrumb { margin-bottom: 20px; padding: 10px; background: #f0f0f0; border-radius: 5px; }
+        .breadcrumb a { text-decoration: none; color: #0366d6; margin-right: 5px; cursor: pointer; }
+        .file-list { list-style: none; padding-left: 0; }
+        .file-list li { padding: 8px; border-bottom: 1px solid #eee; display: flex; align-items: center; }
+        .file-list li:hover { background: #f9f9f9; }
+        .icon { margin-right: 12px; font-size: 18px; width: 24px; text-align: center; }
+        .dir { cursor: pointer; color: #0366d6; font-weight: 500; }
+        .file { cursor: pointer; color: #333; }
+        .file:hover { text-decoration: underline; }
+        .back-link { margin-top: 20px; display: inline-block; }
+        .footer { margin-top: 40px; font-size: 12px; color: #666; text-align: center; }
+        
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 900px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: black; }
+        .preview-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .preview-content {
+            max-height: 500px;
+            overflow: auto;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .preview-content pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .download-btn {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 16px;
+            background: #0366d6;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+        .download-btn:hover { background: #0250a3; }
+        .error-msg { color: #d73a49; }
+    </style>
+</head>
+<body>
+    <h1>📁 配置文件仓库</h1>
+    <div class="breadcrumb" id="breadcrumb">根目录</div>
+    <ul class="file-list" id="file-list">加载中...</ul>
+    <div class="footer">点击文件夹进入，点击文件预览内容 | 预览框内可下载</div>
+
+    <!-- 预览模态框 -->
+    <div id="previewModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="preview-header">
+                <strong id="preview-filename">文件名</strong>
+            </div>
+            <div id="preview-body" class="preview-content">
+                加载中...
+            </div>
+            <button id="download-from-modal" class="download-btn">下载此文件</button>
+        </div>
+    </div>
+
+    <script>
+        // ---------- 配置 ----------
+        const GITHUB_USER = 'p1ymouth';     // 替换为你的 GitHub 用户名
+        const REPO_NAME = 'cfg-front';           // 替换为你的仓库名
+        const BRANCH = 'main';                // 默认分支
+        const ROOT_PATH = '';                 // 可选：设置起始目录，如 'cfgs'
+
+        // 可预览的文件扩展名（文本类）
+        const PREVIEW_EXTENSIONS = ['.cfg', '.txt', '.md', '.json', '.xml', '.yml', '.yaml', '.ini', '.conf', '.log', '.js', '.css', '.html'];
+
+        // 全局状态
+        let currentPath = ROOT_PATH;
+        let currentFileItem = null;   // 存储当前预览的文件信息
+
+        // DOM 元素
+        const modal = document.getElementById('previewModal');
+        const closeModalSpan = document.querySelector('.close');
+        const previewFilenameSpan = document.getElementById('preview-filename');
+        const previewBodyDiv = document.getElementById('preview-body');
+        const downloadModalBtn = document.getElementById('download-from-modal');
+
+        // ---------- 辅助函数 ----------
+        function getFileExtension(filename) {
+            const lastDot = filename.lastIndexOf('.');
+            if (lastDot === -1) return '';
+            return filename.substring(lastDot).toLowerCase();
+        }
+
+        function isTextFile(filename) {
+            const ext = getFileExtension(filename);
+            return PREVIEW_EXTENSIONS.includes(ext);
+        }
+
+        // 显示模态框并加载内容
+        async function previewFile(item) {
+            currentFileItem = item;
+            previewFilenameSpan.textContent = item.name;
+            previewBodyDiv.innerHTML = '正在加载内容...';
+            modal.style.display = 'block';
+
+            // 检查文件大小（如果有 size 信息）
+            if (item.size && item.size > 1024 * 1024) { // 大于 1MB
+                previewBodyDiv.innerHTML = `<div class="error-msg">文件较大 (${(item.size/1024/1024).toFixed(2)} MB)，为避免卡顿，不建议预览。<br>请点击下方按钮直接下载。</div>`;
+                return;
+            }
+
+            try {
+                // 使用 raw URL 获取内容
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${item.path}`;
+                const response = await fetch(rawUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const text = await response.text();
+                // 简单检测二进制（控制字符比例过高可认为是二进制，这里不复杂处理）
+                previewBodyDiv.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+            } catch (err) {
+                previewBodyDiv.innerHTML = `<div class="error-msg">无法加载内容: ${err.message}<br>可能文件不是文本，请直接下载。</div>`;
+            }
+        }
+
+        // 简单的 HTML 转义，防止 XSS
+        function escapeHtml(str) {
+            return str.replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+                return c;
+            });
+        }
+
+        // 关闭模态框
+        function closeModal() {
+            modal.style.display = 'none';
+            currentFileItem = null;
+        }
+
+        // 下载当前预览的文件
+        function downloadCurrentFile() {
+            if (currentFileItem) {
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${currentFileItem.path}`;
+                const a = document.createElement('a');
+                a.href = rawUrl;
+                a.download = currentFileItem.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            }
+        }
+
+        // ---------- 目录加载逻辑 ----------
+        function updateBreadcrumb() {
+            const breadDiv = document.getElementById('breadcrumb');
+            if (!currentPath) {
+                breadDiv.innerHTML = '<a href="#" data-path="">根目录</a>';
+                // 绑定事件
+                document.querySelectorAll('#breadcrumb a').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const path = link.getAttribute('data-path');
+                        if (path === '') currentPath = '';
+                        else currentPath = path;
+                        loadDirectory(currentPath);
+                    });
+                });
+                return;
+            }
+            const parts = currentPath.split('/');
+            let html = '<a href="#" data-path="">根目录</a> / ';
+            let cumulative = '';
+            parts.forEach((part, idx) => {
+                cumulative += (idx === 0 ? part : '/' + part);
+                if (idx === parts.length - 1) {
+                    html += `<span>${part}</span>`;
+                } else {
+                    html += `<a href="#" data-path="${cumulative}">${part}</a> / `;
+                }
+            });
+            breadDiv.innerHTML = html;
+            // 重新绑定
+            document.querySelectorAll('#breadcrumb a').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const path = link.getAttribute('data-path');
+                    if (path === '') currentPath = '';
+                    else currentPath = path;
+                    loadDirectory(currentPath);
+                });
+            });
+        }
+
+        async function loadDirectory(path) {
+            const listDiv = document.getElementById('file-list');
+            listDiv.innerHTML = '加载中...';
+            let apiUrl = `https://api.github.com/repos/${GITHUB_USER}/${REPO_NAME}/contents/${path}`;
+            if (BRANCH) apiUrl += `?ref=${BRANCH}`;
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const items = await response.json();
+                if (!Array.isArray(items)) {
+                    listDiv.innerHTML = '<li>无法获取目录内容</li>';
+                    return;
+                }
+                items.sort((a, b) => {
+                    if (a.type === 'dir' && b.type !== 'dir') return -1;
+                    if (a.type !== 'dir' && b.type === 'dir') return 1;
+                    return a.name.localeCompare(b.name);
+                });
+
+                if (items.length === 0) {
+                    listDiv.innerHTML = '<li>此文件夹为空</li>';
+                } else {
+                    listDiv.innerHTML = '';
+                    items.forEach(item => {
+                        const li = document.createElement('li');
+                        const iconSpan = document.createElement('span');
+                        iconSpan.className = 'icon';
+                        const nameSpan = document.createElement('span');
+
+                        if (item.type === 'dir') {
+                            iconSpan.textContent = '📁';
+                            nameSpan.textContent = item.name;
+                            nameSpan.className = 'dir';
+                            nameSpan.style.cursor = 'pointer';
+                            nameSpan.addEventListener('click', () => {
+                                const newPath = path ? `${path}/${item.name}` : item.name;
+                                currentPath = newPath;
+                                loadDirectory(currentPath);
+                                updateBreadcrumb();
+                            });
+                            li.appendChild(iconSpan);
+                            li.appendChild(nameSpan);
+                        } else {
+                            iconSpan.textContent = '📄';
+                            nameSpan.textContent = item.name;
+                            nameSpan.className = 'file';
+                            nameSpan.style.cursor = 'pointer';
+                            // 点击文件时尝试预览
+                            nameSpan.addEventListener('click', () => {
+                                if (isTextFile(item.name)) {
+                                    previewFile(item);
+                                } else {
+                                    // 非文本文件直接下载
+                                    const rawUrl = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/${item.path}`;
+                                    const a = document.createElement('a');
+                                    a.href = rawUrl;
+                                    a.download = item.name;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                }
+                            });
+                            li.appendChild(iconSpan);
+                            li.appendChild(nameSpan);
+                        }
+                        listDiv.appendChild(li);
+                    });
+                }
+                updateBreadcrumb();
+            } catch (err) {
+                console.error(err);
+                listDiv.innerHTML = `<li>加载失败: ${err.message}<br>请检查仓库名、用户名、分支是否正确，且仓库是公开的。</li>`;
+            }
+        }
+
+        // 模态框事件绑定
+        closeModalSpan.onclick = closeModal;
+        window.onclick = function(event) {
+            if (event.target === modal) closeModal();
+        };
+        downloadModalBtn.onclick = downloadCurrentFile;
+
+        // 初始化
+        loadDirectory(currentPath);
+    </script>
+</body>
+</html>
