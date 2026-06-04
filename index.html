@@ -45,7 +45,7 @@
         const BASE_RAW = `https://raw.githubusercontent.com/${GITHUB_USER}/${REPO_NAME}/${BRANCH}/`;
 
         let allFiles = [];
-        let currentPath = 'cfgs';   // 当前浏览的目录（相对于仓库根目录）
+        let currentPath = 'cfgs';
         let currentFileItem = null;
 
         function getChildren(dirPath) {
@@ -169,15 +169,34 @@
             return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
         }
 
+        // 强制下载文件，而不是浏览器打开
+        async function downloadFile(item) {
+            if (!item) return;
+            const rawUrl = BASE_RAW + item.path;
+            try {
+                const response = await fetch(rawUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const blob = await response.blob();
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.href = url;
+                link.download = item.name;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert('下载失败: ' + err.message);
+            }
+        }
+
         async function loadFileList() {
             try {
                 const resp = await fetch('files.json');
                 if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
                 if (!Array.isArray(data)) throw new Error('Invalid files.json');
-                // 只保留 cfgs 目录下的文件
                 allFiles = data.filter(f => f.path && f.path.startsWith('cfgs/'));
-                // 读取 hash 决定起始目录
                 const hash = window.location.hash.slice(1);
                 if (hash && hash.startsWith('cfgs/')) {
                     currentPath = hash;
@@ -190,19 +209,13 @@
             }
         }
 
-        // 模态框关闭等
         const modal = document.getElementById('previewModal');
         document.querySelector('.close').onclick = () => modal.style.display = 'none';
         window.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+        // 绑定下载按钮事件
         document.getElementById('download-from-modal').onclick = () => {
             if (currentFileItem) {
-                const rawUrl = BASE_RAW + currentFileItem.path;
-                const a = document.createElement('a');
-                a.href = rawUrl;
-                a.download = currentFileItem.name;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                downloadFile(currentFileItem);
             }
         };
 
