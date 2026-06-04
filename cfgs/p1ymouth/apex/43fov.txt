@@ -1,0 +1,22 @@
+1080p 显示器（1920×1440）
+
+plaintext
+
+-novid -preload -high +m_rawinput 1 +fps_max 0 +cl_fovScale 1.7 +mat_letterbox_aspect_min 1.0 -w 1920 -h 1440
+ 
+
+2K 显示器（2560×1920）
+
+plaintext
+
+-novid -preload -high +m_rawinput 1 +fps_max 0 +cl_fovScale 1.7 +mat_letterbox_aspect_min 1.0 -w 2560 -h 1920
+ 
+
+二、参数说明（关键）
+
+-  +cl_fovScale 1.7  → 强制120FOV（游戏内显示110，实际120）
+-  +mat_letterbox_aspect_min 1.0  → 4:3全屏拉伸、无黑边
+-  -w 1920 -h 1440  → 4:3超分辨率（1080p屏专用）
+-  -novid -preload -high  → 跳过开场、预加载、高优先级（稳帧）
+-  +m_rawinput 1  → 原始鼠标输入，降低延迟
+-  +fps_max 0  → 解锁帧率上限
