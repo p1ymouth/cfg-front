@@ -2,5 +2,6 @@
 {"path":"cfgs/p1ymouth/apex/169fov.txt","name":"169fov.txt","size":33},
 {"path":"cfgs/p1ymouth/apex/43fov.txt","name":"43fov.txt","size":719},
 {"path":"cfgs/p1ymouth/cs/.gitkeep","name":".gitkeep","size":12},
-{"path":"cfgs/p1ymouth/cs/cs2_user_convars_0_slot0.vcfg","name":"cs2_user_convars_0_slot0.vcfg","size":3417}
+{"path":"cfgs/p1ymouth/cs/cs2_user_convars_0_slot0.vcfg","name":"cs2_user_convars_0_slot0.vcfg","size":3405},
+{"path":"cfgs/p1ymouth/cs/cs2_video.txt","name":"cs2_video.txt","size":1063}
 ]
